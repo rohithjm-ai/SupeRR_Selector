@@ -1,6 +1,27 @@
+# Virtual environment
 .venv/
+
+# Python cache
 __pycache__/
+*.py[cod]
+
+# Jupyter
 .ipynb_checkpoints/
-data/
+
+# VS Code
+.vscode/
+
+# Competition proprietary data
+data/raw/
+data/processed/
+
+# Generated outputs
 outputs/
+reports/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Environment variables
 .env
