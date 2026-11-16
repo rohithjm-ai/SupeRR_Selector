@@ -1,0 +1,8 @@
+file path
+Number of rows 
+Number of columns 
+Column names 
+Data types 
+Missing values 
+Duplicate rows. 
+Top 5 Records 
