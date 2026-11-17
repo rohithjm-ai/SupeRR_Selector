@@ -1,66 +1,63 @@
 from pathlib import Path
 import pandas as pd
 
-DATA_DIR = Path("data/raw")
-PROCESSED_DIR = Path("data/processed")
+DATA_DIR = Path("data/processed")
 
 
-def create_competition_datasets():
+def inspect_scoring_data(file_name):
 
-    # Load datasets
-    matches = pd.read_csv(DATA_DIR / "matches.csv")
-    competitions = pd.read_csv(DATA_DIR / "competitions.csv")
-    deliveries = pd.read_csv(DATA_DIR / "ball_by_ball.csv")
+    df = pd.read_csv(DATA_DIR / file_name)
 
-    # Attach competition details to matches
-    match_data = matches.merge(competitions, on="comp_id", how="left")
+    print("\n" + "=" * 70)
+    print(f"SCORING ANALYSIS: {file_name}")
+    print("=" * 70)
 
-    # Separate IPL and T20I matches
-    ipl_matches = match_data[
-        match_data["comp_name"].str.contains(r"\bIPL\b", case=False, na=False)
-    ].copy()
+    # Basic run totals
+    print("\nRUNS AND EXTRAS")
+    print("Sum of runs:", df["runs"].sum())
+    print("Sum of extras1_runs:", df["extras1_runs"].sum())
+    print("Sum of extras_2_runs:", df["extras_2_runs"].sum())
 
-    t20i_matches = match_data[match_data["match_format"] == "T20I"].copy()
+    # Extras analysis
+    print("\nEXTRAS TYPES")
+    print(df["extras_type"].value_counts(dropna=False).to_string())
 
-    # Get match IDs
-    ipl_match_ids = ipl_matches["match_id"]
-    t20i_match_ids = t20i_matches["match_id"]
+    # Deliveries containing extras
+    extras = df[(df["extras1_runs"] > 0) | (df["extras_2_runs"] > 0)]
 
-    # Separate ball-by-ball deliveries
-    ipl_deliveries = deliveries[deliveries["match_id"].isin(ipl_match_ids)].copy()
+    print("\nDELIVERIES WITH EXTRAS:", len(extras))
 
-    t20i_deliveries = deliveries[deliveries["match_id"].isin(t20i_match_ids)].copy()
+    print("\nEXAMPLE EXTRAS DELIVERIES")
+    print(
+        extras[
+            [
+                "striker_name",
+                "bowler_name",
+                "runs",
+                "extras_type",
+                "extras1_runs",
+                "extras_2_runs",
+            ]
+        ]
+        .head(10)
+        .to_string(index=False)
+    )
 
-    # Create processed directory
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    # Wicket analysis
+    wickets = df[df["is_wicket"] == True]
 
-    # Save datasets
-    ipl_matches.to_csv(PROCESSED_DIR / "ipl_matches.csv", index=False)
+    print("\nWICKET ANALYSIS")
+    print("Total wicket deliveries:", len(wickets))
 
-    t20i_matches.to_csv(PROCESSED_DIR / "t20i_matches.csv", index=False)
+    print("\nDISMISSAL TYPES")
+    print(wickets["dismissal_type"].value_counts(dropna=False).to_string())
 
-    ipl_deliveries.to_csv(PROCESSED_DIR / "ipl_deliveries.csv", index=False)
 
-    t20i_deliveries.to_csv(PROCESSED_DIR / "t20i_deliveries.csv", index=False)
+def main():
 
-    # Display results
-    print("\nCOMPETITION DATASET SUMMARY")
-    print("=" * 60)
-
-    print("\nIPL")
-    print("Matches:", len(ipl_matches))
-    print("Deliveries:", len(ipl_deliveries))
-
-    print("\nT20I")
-    print("Matches:", len(t20i_matches))
-    print("Deliveries:", len(t20i_deliveries))
-
-    print("\nTOTAL")
-    print("Matches:", len(ipl_matches) + len(t20i_matches))
-    print("Deliveries:", len(ipl_deliveries) + len(t20i_deliveries))
-
-    print("\nFiles saved in:", PROCESSED_DIR)
+    inspect_scoring_data("ipl_deliveries.csv")
+    inspect_scoring_data("t20i_deliveries.csv")
 
 
 if __name__ == "__main__":
-    create_competition_datasets()
+    main()
