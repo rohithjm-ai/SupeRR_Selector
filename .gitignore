@@ -11,9 +11,7 @@ __pycache__/
 # VS Code
 .vscode/
 
-# Competition proprietary data
-data/raw/
-data/processed/
+
 
 # Generated outputs
 outputs/
