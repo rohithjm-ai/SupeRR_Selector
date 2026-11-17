@@ -1,47 +1,93 @@
+
 from pathlib import Path
 import pandas as pd
 
 DATA_DIR = Path("data/raw")
+PROCESSED_DIR = Path("data/processed")
 
 
-def inspect_competitions():
+def create_competition_datasets():
+
+    # Load datasets
     matches = pd.read_csv(DATA_DIR / "matches.csv")
     competitions = pd.read_csv(DATA_DIR / "competitions.csv")
     deliveries = pd.read_csv(DATA_DIR / "ball_by_ball.csv")
 
-    # Connect each match to its competition
-    match_data = matches.merge(competitions, on="comp_id", how="left")
-
-    # Connect each delivery to its competition
-    delivery_data = deliveries.merge(
-        matches[["match_id", "comp_id"]], on="match_id", how="left"
+    # Attach competition details to matches
+    match_data = matches.merge(
+        competitions,
+        on="comp_id",
+        how="left"
     )
 
-    delivery_data = delivery_data.merge(competitions, on="comp_id", how="left")
+    # Separate IPL and T20I matches
+    ipl_matches = match_data[
+        match_data["comp_name"].str.contains(
+            r"\bIPL\b",
+            case=False,
+            na=False
+        )
+    ].copy()
 
-    # Competition-level summary
-    summary = (
-        match_data.groupby(["comp_id", "comp_name", "match_format", "season"])
-        .agg(matches=("match_id", "nunique"))
-        .reset_index()
+    t20i_matches = match_data[
+        match_data["match_format"] == "T20I"
+    ].copy()
+
+    # Get match IDs
+    ipl_match_ids = ipl_matches["match_id"]
+    t20i_match_ids = t20i_matches["match_id"]
+
+    # Separate ball-by-ball deliveries
+    ipl_deliveries = deliveries[
+        deliveries["match_id"].isin(ipl_match_ids)
+    ].copy()
+
+    t20i_deliveries = deliveries[
+        deliveries["match_id"].isin(t20i_match_ids)
+    ].copy()
+
+    # Create processed directory
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Save datasets
+    ipl_matches.to_csv(
+        PROCESSED_DIR / "ipl_matches.csv",
+        index=False
     )
 
-    delivery_summary = (
-        delivery_data.groupby("comp_id")
-        .agg(deliveries=("match_id", "size"))
-        .reset_index()
+    t20i_matches.to_csv(
+        PROCESSED_DIR / "t20i_matches.csv",
+        index=False
     )
 
-    summary = summary.merge(delivery_summary, on="comp_id", how="left")
+    ipl_deliveries.to_csv(
+        PROCESSED_DIR / "ipl_deliveries.csv",
+        index=False
+    )
 
-    print("\nCOMPETITION-WISE DATA SUMMARY")
-    print("=" * 90)
-    print(summary.to_string(index=False))
+    t20i_deliveries.to_csv(
+        PROCESSED_DIR / "t20i_deliveries.csv",
+        index=False
+    )
 
-    print("\nTOTAL COMPETITIONS:", summary["comp_id"].nunique())
-    print("TOTAL MATCHES:", matches["match_id"].nunique())
-    print("TOTAL DELIVERIES:", len(deliveries))
+    # Display results
+    print("\nCOMPETITION DATASET SUMMARY")
+    print("=" * 60)
+
+    print("\nIPL")
+    print("Matches:", len(ipl_matches))
+    print("Deliveries:", len(ipl_deliveries))
+
+    print("\nT20I")
+    print("Matches:", len(t20i_matches))
+    print("Deliveries:", len(t20i_deliveries))
+
+    print("\nTOTAL")
+    print("Matches:", len(ipl_matches) + len(t20i_matches))
+    print("Deliveries:", len(ipl_deliveries) + len(t20i_deliveries))
+
+    print("\nFiles saved in:", PROCESSED_DIR)
 
 
 if __name__ == "__main__":
-    inspect_competitions()
+    create_competition_datasets()
