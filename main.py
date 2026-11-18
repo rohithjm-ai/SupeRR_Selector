@@ -288,7 +288,8 @@ def analyse_batters(file_name):
 
         # Require a minimum pressure-innings sample
         qualified = pressure_batting[
-            pressure_batting["innings_count"] >= 15
+     (pressure_batting["innings_count"] >= 15)
+    & (pressure_batting["balls_faced"] >= 100)
         ].copy()
 
         print(
@@ -299,6 +300,7 @@ def analyse_batters(file_name):
         columns = [
             "player_name",
             "runs",
+            "balls_faced",
             "innings_count",
             "dismissals",
             "batting_average",
