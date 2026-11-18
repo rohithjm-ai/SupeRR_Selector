@@ -35,7 +35,10 @@ def analyse_batters(file_name):
         df.groupby(["match_id", "innings"])["total_runs"]
         .sum()
         .unstack()
-        .rename(columns={1: "first_score", 2: "second_score"})
+        .rename(columns={
+            1: "first_score",
+            2: "second_score"
+        })
         .reset_index()
     )
 
@@ -152,7 +155,8 @@ def analyse_batters(file_name):
     # Count dismissals using dismissed_player_id
     dismissals = (
         clean_df[
-            clean_df["dismissed_player_id"].notna()
+            clean_df["is_wicket"].fillna(False)
+            & clean_df["dismissed_player_id"].notna()
         ]
         .groupby("dismissed_player_id")
         .size()
@@ -188,6 +192,132 @@ def analyse_batters(file_name):
         batting["boundary_runs"]
         / batting["runs"].replace(0, pd.NA)
         * 100
+    )
+
+    # Calculate batter performance in a pressure situation
+    def pressure_summary(subset, pressure_name):
+
+        pressure_batting = (
+            subset.groupby(["striker_id", "striker_name"])
+            .agg(
+                runs=("runs", "sum"),
+                balls_faced=("is_ball_faced", "sum"),
+                fours=("is_four", "sum"),
+                sixes=("is_six", "sum")
+            )
+            .reset_index()
+            .rename(columns={
+                "striker_id": "player_id",
+                "striker_name": "player_name"
+            })
+        )
+
+        # Count distinct batting innings
+        innings_count = (
+            subset[
+                ["striker_id", "striker_name", "match_id", "innings"]
+            ]
+            .drop_duplicates()
+            .groupby(["striker_id", "striker_name"])
+            .size()
+            .reset_index(name="innings_count")
+            .rename(columns={
+                "striker_id": "player_id",
+                "striker_name": "player_name"
+            })
+        )
+
+        # Count actual dismissals in this pressure situation
+        pressure_dismissals = (
+            subset[
+                subset["is_wicket"].fillna(False)
+                & subset["dismissed_player_id"].notna()
+            ]
+            .groupby("dismissed_player_id")
+            .size()
+            .reset_index(name="dismissals")
+            .rename(columns={
+                "dismissed_player_id": "player_id"
+            })
+        )
+
+        pressure_batting = pressure_batting.merge(
+            innings_count,
+            on=["player_id", "player_name"],
+            how="left"
+        )
+
+        pressure_batting = pressure_batting.merge(
+            pressure_dismissals,
+            on="player_id",
+            how="left"
+        )
+
+        pressure_batting["dismissals"] = (
+            pressure_batting["dismissals"].fillna(0)
+        )
+
+        pressure_batting["strike_rate"] = (
+            pressure_batting["runs"]
+            / pressure_batting["balls_faced"].replace(0, pd.NA)
+            * 100
+        )
+
+        pressure_batting["batting_average"] = (
+            pressure_batting["runs"]
+            / pressure_batting["dismissals"].replace(0, pd.NA)
+        )
+
+        print(f"\n{pressure_name.upper()} - TOP 10 BATTERS BY RUNS")
+
+        print(
+            pressure_batting.sort_values(
+                "runs", ascending=False
+            )[
+                [
+                    "player_name",
+                    "runs",
+                    "balls_faced",
+                    "innings_count",
+                    "dismissals",
+                    "batting_average",
+                    "strike_rate"
+                ]
+            ].head(10).round(2).to_string(index=False)
+        )
+
+        output_name = (
+            file_name.replace(
+                "_deliveries.csv",
+                f"_{pressure_name}_batters.csv"
+            )
+        )
+
+        pressure_batting.to_csv(
+            DATA_DIR / output_name,
+            index=False
+        )
+
+        print("Saved:", output_name)
+
+    # Pressure situation 1: Death overs (16-20)
+    death_pressure = clean_df[
+        clean_df["phase"] == "Death"
+    ]
+
+    pressure_summary(
+        death_pressure,
+        "death_pressure"
+    )
+
+    # Pressure situation 2: Five or more wickets lost
+    wicket_pressure = clean_df[
+        clean_df["wickets_lost_before"] >= 5
+    ]
+
+    pressure_summary(
+        wicket_pressure,
+        "wicket_pressure"
     )
 
     # Sort by total runs for initial inspection
