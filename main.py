@@ -1,92 +1,41 @@
-
-from pathlib import Path
 import pandas as pd
-
+from pathlib import Path
 
 DATA_DIR = Path("data/processed")
-RAW_DIR = Path("data/raw")
 
+for file_name in ["ipl_deliveries.csv", "t20i_deliveries.csv"]:
 
-def investigate(file_name):
     df = pd.read_csv(DATA_DIR / file_name)
-    match_file = file_name.replace("_deliveries.csv", "_matches.csv")
-    matches = pd.read_csv(DATA_DIR / match_file)
+
+    # Keep only normal innings
     df = df[df["innings"].isin([1, 2])].copy()
 
-    # Calculate the correct total runs, including extras
-    df["total_runs"] = (
-        df["runs"].fillna(0)
-        + df["extras1_runs"].fillna(0)
-        + df["extras_2_runs"].fillna(0)
+    # Identify innings phase
+    df["phase"] = pd.cut(
+        df["overid"],
+        bins=[0, 6, 15, 20],
+        labels=["Powerplay", "Middle", "Death"]
     )
 
-    scores = (
-        df.groupby(["match_id", "innings"])["total_runs"]
-        .sum()
-        .unstack()
-        .rename(columns={
-            1: "first_score",
-            2: "second_score"
-        })
+    # Wickets lost before each delivery
+    df["wickets_lost_before"] = (
+        df.groupby(["match_id", "innings"])["is_wicket"]
+        .transform(lambda x: x.fillna(False).astype(int).cumsum().shift(fill_value=0))
     )
 
-    result = matches.merge(
-        scores,
-        on="match_id",
-        how="left"
-    )
+    print("\n" + "=" * 60)
+    print(f"PRESSURE INVESTIGATION: {file_name}")
+    print("=" * 60)
 
-    print("\n" + "=" * 65)
-    print("REVISED TARGET AND MISSING SCORE INVESTIGATION:", file_name)
-    print("=" * 65)
+    print("\nDELIVERIES BY INNINGS PHASE")
+    print(df["phase"].value_counts().sort_index())
 
-    print("\nMATCHES WITHOUT FIRST OR SECOND INNINGS SCORE")
-    missing = result[
-        result["first_score"].isna()
-        | result["second_score"].isna()
-    ]
+    print("\nDELIVERIES BY WICKETS LOST")
+    print(df["wickets_lost_before"].value_counts().sort_index())
 
-    print("Count:", len(missing))
+    print("\nDEATH OVERS BY WICKETS LOST")
+    death = df[df["phase"] == "Death"]
+    print(death["wickets_lost_before"].value_counts().sort_index())
 
-    print(
-        missing[
-            ["match_id", "result", "first_score", "second_score"]
-        ].to_string(index=False)
-    )
-
-    print("\nALL MATCHES WITH REVISED TARGET")
-
-    revised = result[result["revised_target"].notna()]
-
-    columns = [
-        "match_id",
-        "first_score",
-        "second_score",
-        "revised_target",
-        "first_inn_revised_overs",
-        "second_inn_revised_overs",
-        "result"
-    ]
-
-    print(revised[columns].to_string(index=False))
-
-    print("\nRESULTS MENTIONING D/L OR DLS")
-
-    dls = result[
-        result["result"].str.contains(
-            r"D/L|DLS|Duckworth",
-            case=False,
-            na=False
-        )
-    ]
-
-    print(dls[columns].to_string(index=False))
-
-
-def main():
-    investigate("ipl_deliveries.csv")
-    investigate("t20i_deliveries.csv")
-
-
-if __name__ == "__main__":
-    main()
+    print("\nFIRST INNINGS VS SECOND INNINGS")
+    print(df.groupby("innings", observed=False).size())
