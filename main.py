@@ -2,6 +2,7 @@
 from pathlib import Path
 import pandas as pd
 
+
 DATA_DIR = Path("data/processed")
 RAW_DIR = Path("data/raw")
 
@@ -12,8 +13,15 @@ def investigate(file_name):
 
     df = df[df["innings"].isin([1, 2])].copy()
 
+    # Calculate the correct total runs, including extras
+    df["total_runs"] = (
+        df["runs"].fillna(0)
+        + df["extras1_runs"].fillna(0)
+        + df["extras_2_runs"].fillna(0)
+    )
+
     scores = (
-        df.groupby(["match_id", "innings"])["runs"]
+        df.groupby(["match_id", "innings"])["total_runs"]
         .sum()
         .unstack()
         .rename(columns={
