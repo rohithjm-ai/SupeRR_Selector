@@ -5,45 +5,53 @@ import pandas as pd
 DATA_DIR = Path("data/processed")
 
 
-def inspect_other(file_name):
+def inspect_pressure_data(file_name):
     df = pd.read_csv(DATA_DIR / file_name)
 
     print("\n" + "=" * 65)
-    print("OTHER CATEGORY INVESTIGATION:", file_name)
+    print("PRESSURE DATA INSPECTION:", file_name)
     print("=" * 65)
 
-    other = df[df["extras_type"] == "other"].copy()
+    print("\nINNINGS DISTRIBUTION")
+    print(df["innings"].value_counts().sort_index().to_string())
 
-    print("\nTOTAL OTHER RECORDS:", len(other))
+    print("\nOVER ID SUMMARY")
+    print(df["overid"].describe().to_string())
 
-    print("\nDELIVERY STYLE COUNTS")
+    print("\nOVER ID VALUES")
     print(
-        other["delivery_style"]
-        .fillna("Missing")
+        df["overid"]
         .value_counts()
+        .sort_index()
         .to_string()
     )
 
-    print("\nDELIVERY STYLE AND RUNS")
-    print(
-        other.groupby(
-            ["delivery_style", "runs", "extras1_runs", "extras_2_runs"],
-            dropna=False
-        ).size().to_string()
+    print("\nDELIVERIES PER OVER SUMMARY")
+    deliveries_per_over = (
+        df.groupby(["match_id", "innings", "overid"])
+        .size()
     )
+    print(deliveries_per_over.describe().to_string())
 
-    print("\nWICKET DETAILS")
-    print(
-        other[other["is_wicket"] == True][
-            ["match_id", "striker_name", "bowler_name",
-             "delivery_style", "dismissal_type"]
-        ].to_string(index=False)
-    )
+    print("\nFIRST 15 DELIVERY RECORDS")
+    columns = [
+        "match_id",
+        "innings",
+        "overid",
+        "over_ball_num",
+        "innings_ball_num",
+        "striker_name",
+        "runs",
+        "extras_type",
+        "is_wicket"
+    ]
+
+    print(df[columns].head(15).to_string(index=False))
 
 
 def main():
-    inspect_other("ipl_deliveries.csv")
-    inspect_other("t20i_deliveries.csv")
+    inspect_pressure_data("ipl_deliveries.csv")
+    inspect_pressure_data("t20i_deliveries.csv")
 
 
 if __name__ == "__main__":
