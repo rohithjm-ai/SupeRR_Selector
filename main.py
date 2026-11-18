@@ -2,54 +2,106 @@
 from pathlib import Path
 import pandas as pd
 
-DATA_DIR = Path("data/processed")
+RAW_DIR = Path("data/raw")
+PROCESSED_DIR = Path("data/processed")
 
 
-def inspect_extra_details(file_name):
-    df = pd.read_csv(DATA_DIR / file_name)
+def verify_match_scores(file_name):
+    deliveries = pd.read_csv(PROCESSED_DIR / file_name)
+    matches = pd.read_csv(RAW_DIR / "matches.csv")
 
-    print("\n" + "=" * 70)
-    print(file_name)
-    print("=" * 70)
+    # Calculate total runs for every delivery.
+    deliveries["total_runs"] = (
+        deliveries["runs"]
+        + deliveries["extras1_runs"]
+        + deliveries["extras_2_runs"]
+    )
 
-    print("\nROWS WHERE extras_2_runs > 0")
+    # Calculate each team's innings score.
+    innings_scores = (
+        deliveries.groupby(
+            ["match_id", "innings", "batting_team_id"]
+        )
+        .agg(team_score=("total_runs", "sum"))
+        .reset_index()
+    )
 
-    selected = df[df["extras_2_runs"] > 0]
+    # Consider matches decided by runs.
+    matches["run_margin"] = pd.to_numeric(
+        matches["result"].str.extract(
+            r"Won by (\d+)\s+runs?",
+            flags=0
+        )[0],
+        errors="coerce"
+    )
 
-    columns = [
-        "match_id",
-        "innings",
-        "overid",
-        "striker_name",
-        "bowler_name",
-        "runs",
-        "is_four",
-        "is_six",
-        "extras_type",
-        "extras1_runs",
-        "extras_2_runs",
-        "stroke",
-        "delivery_style"
-    ]
-
-    print(selected[columns].head(20).to_string(index=False))
-
-    print("\nROWS WHERE EXTRAS TYPE IS MISSING BUT EXTRAS EXIST")
-
-    unusual = df[
-        df["extras_type"].isna() &
-        (
-            (df["extras1_runs"] > 0) |
-            (df["extras_2_runs"] > 0)
+    run_matches = matches[
+        matches["run_margin"].notna()
+        & ~matches["result"].str.contains(
+            r"D/?L|DLS",
+            case=False,
+            na=False
         )
     ]
 
-    print(unusual[columns].to_string(index=False))
+    results = []
+
+    for _, match in run_matches.iterrows():
+
+        match_innings = innings_scores[
+            innings_scores["match_id"] == match["match_id"]
+        ]
+
+        winner = match_innings[
+            match_innings["batting_team_id"] == match["win_team_id"]
+        ]
+
+        loser = match_innings[
+            match_innings["batting_team_id"] != match["win_team_id"]
+        ]
+
+        if winner.empty or loser.empty:
+            continue
+
+        winner_score = winner["team_score"].iloc[0]
+        loser_score = loser["team_score"].iloc[0]
+
+        calculated_margin = winner_score - loser_score
+
+        results.append({
+            "match_id": match["match_id"],
+            "result": match["result"],
+            "calculated_margin": calculated_margin,
+            "actual_margin": match["run_margin"],
+            "match_status": (
+                "PASS"
+                if calculated_margin == match["run_margin"]
+                else "CHECK"
+            )
+        })
+
+    result_df = pd.DataFrame(results)
+
+    print("\n" + "=" * 65)
+    print(f"SCORE VALIDATION: {file_name}")
+    print("=" * 65)
+
+    print("\nMatches checked:", len(result_df))
+    print("Exact matches:", (result_df["match_status"] == "PASS").sum())
+    print("Mismatches:", (result_df["match_status"] == "CHECK").sum())
+
+    print("\nMISMATCH DETAILS")
+
+    mismatches = result_df[
+        result_df["match_status"] == "CHECK"
+    ]
+
+    print(mismatches.head(10).to_string(index=False))
 
 
 def main():
-    inspect_extra_details("ipl_deliveries.csv")
-    inspect_extra_details("t20i_deliveries.csv")
+    verify_match_scores("ipl_deliveries.csv")
+    verify_match_scores("t20i_deliveries.csv")
 
 
 if __name__ == "__main__":
