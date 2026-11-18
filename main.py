@@ -9,8 +9,8 @@ RAW_DIR = Path("data/raw")
 
 def investigate(file_name):
     df = pd.read_csv(DATA_DIR / file_name)
-    matches = pd.read_csv(RAW_DIR / "matches.csv")
-
+    match_file = file_name.replace("_deliveries.csv", "_matches.csv")
+    matches = pd.read_csv(DATA_DIR / match_file)
     df = df[df["innings"].isin([1, 2])].copy()
 
     # Calculate the correct total runs, including extras
