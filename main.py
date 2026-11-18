@@ -215,7 +215,12 @@ def analyse_batters(file_name):
         # Count distinct batting innings
         innings_count = (
             subset[
-                ["striker_id", "striker_name", "match_id", "innings"]
+                [
+                    "striker_id",
+                    "striker_name",
+                    "match_id",
+                    "innings"
+                ]
             ]
             .drop_duplicates()
             .groupby(["striker_id", "striker_name"])
@@ -268,29 +273,10 @@ def analyse_batters(file_name):
             / pressure_batting["dismissals"].replace(0, pd.NA)
         )
 
-        print(f"\n{pressure_name.upper()} - TOP 10 BATTERS BY RUNS")
-
-        print(
-            pressure_batting.sort_values(
-                "runs", ascending=False
-            )[
-                [
-                    "player_name",
-                    "runs",
-                    "balls_faced",
-                    "innings_count",
-                    "dismissals",
-                    "batting_average",
-                    "strike_rate"
-                ]
-            ].head(10).round(2).to_string(index=False)
-        )
-
-        output_name = (
-            file_name.replace(
-                "_deliveries.csv",
-                f"_{pressure_name}_batters.csv"
-            )
+        # Save original unfiltered pressure statistics
+        output_name = file_name.replace(
+            "_deliveries.csv",
+            f"_{pressure_name}_batters.csv"
         )
 
         pressure_batting.to_csv(
@@ -299,6 +285,56 @@ def analyse_batters(file_name):
         )
 
         print("Saved:", output_name)
+
+        # Require a minimum pressure-innings sample
+        qualified = pressure_batting[
+            pressure_batting["innings_count"] >= 15
+        ].copy()
+
+        print(
+            f"\n{pressure_name.upper()} - QUALIFIED BATTERS "
+            "(MINIMUM 15 INNINGS)"
+        )
+
+        columns = [
+            "player_name",
+            "runs",
+            "innings_count",
+            "dismissals",
+            "batting_average",
+            "strike_rate"
+        ]
+
+        print("\nTOP 10 BY BATTING AVERAGE")
+
+        print(
+            qualified.sort_values(
+                ["batting_average", "strike_rate"],
+                ascending=False
+            )[columns].head(10).round(2).to_string(index=False)
+        )
+
+        print("\nTOP 10 BY STRIKE RATE")
+
+        print(
+            qualified.sort_values(
+                ["strike_rate", "batting_average"],
+                ascending=False
+            )[columns].head(10).round(2).to_string(index=False)
+        )
+
+        # Save qualified pressure statistics
+        qualified_output = file_name.replace(
+            "_deliveries.csv",
+            f"_{pressure_name}_qualified.csv"
+        )
+
+        qualified.to_csv(
+            DATA_DIR / qualified_output,
+            index=False
+        )
+
+        print("Saved:", qualified_output)
 
     # Pressure situation 1: Death overs (16-20)
     death_pressure = clean_df[
